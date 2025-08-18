@@ -162,8 +162,8 @@ IO ports for current devices (all at $7fxx)
 | $02 | LCD Command |
 | $03 | LCD Data |
 | $08 | ROM Banking Register |
-| $10 | TMS9918A Command |
-| $11 | TMS9918A Data |
+| $10 | TMS9918A Data |
+| $11 | TMS9918A Command |
 | $20 | UART MC68B50 Register |
 | $21 | UART MC68B50 Data |
 | $40 | AY-3-8910 A Register |
