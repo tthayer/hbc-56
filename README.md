@@ -57,6 +57,23 @@ All platforms require:
 - **C++ compiler** (clang++ or g++) with C++17 support
 - **Git** (with support for submodules)
 
+#### Windows
+
+- Install **Visual Studio** with C++ support, or **Visual Studio Build Tools**
+- Install **CMake** from [cmake.org](https://cmake.org/download/)
+- Install **Git** from [git-scm.com](https://git-scm.com/)
+
+#### Linux
+
+Install the required build tools:
+```bash
+# Ubuntu/Debian
+sudo apt-get install build-essential cmake git
+
+# Fedora/RHEL
+sudo dnf install gcc g++ cmake git
+```
+
 #### macOS
 
 On macOS, you can install requirements via Homebrew:
@@ -73,23 +90,6 @@ The Xcode Command Line Tools (which includes clang and git) are required. If not
 ```bash
 xcode-select --install
 ```
-
-#### Linux
-
-Install the required build tools:
-```bash
-# Ubuntu/Debian
-sudo apt-get install build-essential cmake git
-
-# Fedora/RHEL
-sudo dnf install gcc g++ cmake git
-```
-
-#### Windows
-
-- Install **Visual Studio** with C++ support, or **Visual Studio Build Tools**
-- Install **CMake** from [cmake.org](https://cmake.org/download/)
-- Install **Git** from [git-scm.com](https://git-scm.com/)
 
 ### Windows or Linux
 
