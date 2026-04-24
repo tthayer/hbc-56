@@ -14,6 +14,12 @@ eval_left_x        = $2F   ; Expression evaluator: left operand (high byte)
 eval_right_a       = $30   ; Expression evaluator: right operand (low byte)
 eval_right_x       = $31   ; Expression evaluator: right operand (high byte)
 eval_op            = $32   ; Expression evaluator: operator type
+for_var_index      = $33   ; FOR: variable index
+for_end_low        = $34   ; FOR: end value (low byte)
+for_end_high       = $35   ; FOR: end value (high byte)
+for_step_low       = $36   ; FOR: step value (low byte)
+for_step_high      = $37   ; FOR: step value (high byte)
+for_stack_ptr      = $38   ; FOR: pointer into for_stack
 
 ; Variable storage area
 *=$0200
@@ -585,16 +591,168 @@ stmt_then:
     rts
 
 ; FOR - start loop
+; Format: FOR var = start TO end [STEP step]
+; Stack entry: 7 bytes per FOR context (in for_stack at $1340)
+; - Byte 0: variable index
+; - Bytes 1-2: end value (signed 16-bit, low:high)
+; - Bytes 3-4: step value (signed 16-bit, low:high)
+; - Bytes 5-6: FOR statement address (for jumping back, low:high)
 stmt_for:
     php
     pha
     phx
     phy
     
-    ; FOR var = start TO end [STEP step]
-    ; For Phase 1: simplified - just skip the statement
-    ; TODO: Push loop context to FOR stack
+    ; Check nesting depth (max 9 contexts * 7 bytes = 63 bytes)
+    lda for_depth
+    cmp #9
+    bcc for_depth_ok
+    jmp for_error
     
+for_depth_ok:
+    ; Get variable index
+    inc interp_pc           ; Skip KW_FOR
+    lda (interp_pc)
+    cmp #TOKEN_VARIABLE
+    beq for_got_var
+    jmp for_error
+    
+for_got_var:
+    inc interp_pc
+    lda (interp_pc)         ; Variable index
+    sta for_var_index       ; Save for later
+    inc interp_pc
+    
+    ; Expect = operator
+    lda (interp_pc)
+    cmp #TOKEN_OPERATOR
+    beq for_got_op
+    jmp for_error
+    
+for_got_op:
+    inc interp_pc
+    lda (interp_pc)
+    cmp #OP_EQUAL
+    beq for_got_equal
+    jmp for_error
+    
+for_got_equal:
+    inc interp_pc
+    
+    ; Evaluate start expression
+    jsr eval_expr
+    ; Result in X:A - store in variable table
+    pha
+    phx
+    lda for_var_index
+    asl                     ; *2 for word offset
+    tay
+    pla                     ; eval_left_a
+    tax
+    pla                     ; eval_left_x
+    
+    ; X:A = start value, Y = variable offset
+    sta $0200,y
+    txa
+    sta $0201,y
+    
+    ; Next should be the end value (no explicit TO keyword in our bytecode)
+    ; Just evaluate the next expression directly
+    inc interp_pc           ; Move to next token
+    
+for_got_to:
+    ; Evaluate end expression
+    jsr eval_expr
+    ; Result in X:A - save to work bytes
+    sta for_end_low
+    stx for_end_high
+    
+    ; Check for STEP - for now, check if next token is a keyword that could be STEP
+    ; STEP would be KW_PLOT ($0E) or higher in our system
+    ; Actually, STEP is not defined. Let's just check if there are more tokens
+    ; If next token is KW_END or NEWLINE, no STEP
+    
+    lda (interp_pc)
+    cmp #TOKEN_DELIMITER
+    beq for_no_step
+    
+    ; Might have STEP - for now, assume it's there and evaluate it
+    ; Skip any STEP keyword/identifier and evaluate
+    jsr eval_expr
+    ; Result in X:A
+    sta for_step_low
+    stx for_step_high
+    jmp for_push_context
+    
+for_no_step:
+    ; No step - default to 1
+    lda #1
+    sta for_step_low
+    lda #0
+    sta for_step_high
+    
+for_push_context:
+    ; Calculate offset into for_stack (each context is 7 bytes)
+    ; for_depth = current index (will be incremented after push)
+    lda for_depth
+    tax
+    
+    ; Multiply by 7: (x*8) - x
+    txa
+    asl                     ; * 2
+    asl                     ; * 4
+    asl                     ; * 8
+    sec
+    sbc for_depth           ; - original
+    clc
+    adc #<for_stack
+    sta $3A                 ; Low byte of address
+    
+    lda #0
+    adc #>for_stack
+    sta $3B                 ; High byte of address
+    
+    ; Now $3A:$3B points to the FOR context location
+    ; Store variable index at offset 0
+    lda for_var_index
+    ldy #0
+    sta ($3A),y
+    
+    ; Store end value at offsets 1-2
+    lda for_end_low
+    ldy #1
+    sta ($3A),y
+    lda for_end_high
+    ldy #2
+    sta ($3A),y
+    
+    ; Store step value at offsets 3-4
+    lda for_step_low
+    ldy #3
+    sta ($3A),y
+    lda for_step_high
+    ldy #4
+    sta ($3A),y
+    
+    ; Store FOR return address at offsets 5-6
+    lda interp_pc
+    ldy #5
+    sta ($3A),y
+    lda interp_pc+1
+    ldy #6
+    sta ($3A),y
+    
+    ; Increment FOR depth
+    inc for_depth
+    
+    jmp for_done
+    
+for_error:
+    ; Skip to next statement (scan to NEWLINE)
+    jsr skip_to_newline
+    inc interp_pc
+    
+for_done:
     ply
     plx
     pla
@@ -608,10 +766,141 @@ stmt_next:
     phx
     phy
     
-    ; NEXT var
-    ; For Phase 1: simplified - just skip the statement
-    ; TODO: Pop loop context, check condition, jump back or continue
+    ; NEXT [var]
+    ; Check if for_depth > 0 (at least one FOR loop active)
+    lda for_depth
+    bne next_have_for
+    jmp next_error
     
+next_have_for:
+    ; Decrement for_depth to get current context index
+    dec for_depth
+    
+    ; Get the current FOR context address
+    lda for_depth
+    tax
+    
+    ; Multiply by 7: (x*8) - x
+    txa
+    asl                     ; * 2
+    asl                     ; * 4
+    asl                     ; * 8
+    sec
+    sbc for_depth           ; - original
+    clc
+    adc #<for_stack
+    sta $3A                 ; Low byte of address
+    
+    lda #0
+    adc #>for_stack
+    sta $3B                 ; High byte of address
+    
+    ; Load FOR context
+    ldy #0
+    lda ($3A),y             ; Variable index
+    sta for_var_index
+    
+    ldy #1
+    lda ($3A),y             ; End value low
+    sta for_end_low
+    ldy #2
+    lda ($3A),y             ; End value high
+    sta for_end_high
+    
+    ldy #3
+    lda ($3A),y             ; Step value low
+    sta for_step_low
+    ldy #4
+    lda ($3A),y             ; Step value high
+    sta for_step_high
+    
+    ; Get variable current value
+    lda for_var_index
+    asl                     ; * 2 for word offset
+    tay
+    lda $0200,y             ; Load variable low byte
+    sta eval_left_a
+    lda $0201,y             ; Load variable high byte
+    sta eval_left_x
+    
+    ; Add step to variable: variable = variable + step
+    ; Load step as operand
+    lda for_step_low
+    sta eval_right_a
+    lda for_step_high
+    sta eval_right_x
+    
+    ; Add: eval_left + eval_right
+    clc
+    lda eval_left_a
+    adc eval_right_a
+    sta eval_left_a
+    lda eval_left_x
+    adc eval_right_x
+    sta eval_left_x
+    
+    ; Store back to variable
+    lda for_var_index
+    asl
+    tay
+    lda eval_left_a
+    sta $0200,y
+    lda eval_left_x
+    sta $0201,y
+    
+    ; Check loop condition
+    ; If step > 0: continue if variable <= end
+    ; If step < 0: continue if variable >= end
+    ; Check step sign
+    lda for_step_high
+    bmi next_check_negative_step
+    
+    ; Step is positive - check if variable <= end
+    lda eval_left_x             ; variable high byte
+    cmp for_end_high
+    bcc next_loop_again         ; variable_high < end_high, continue
+    bne next_done               ; variable_high > end_high, done
+    
+    ; High bytes equal, check low bytes
+    lda eval_left_a
+    cmp for_end_low
+    bcc next_loop_again         ; variable_low < end_low, continue
+    beq next_loop_again         ; variable_low == end_low, continue (<=)
+    jmp next_done
+    
+next_check_negative_step:
+    ; Step is negative - check if variable >= end
+    lda eval_left_x             ; variable high byte
+    cmp for_end_high
+    bcc next_done               ; variable_high < end_high, done
+    bne next_loop_again         ; variable_high > end_high, continue
+    
+    ; High bytes equal, check low bytes
+    lda eval_left_a
+    cmp for_end_low
+    bcc next_done               ; variable_low < end_low, done
+    jmp next_loop_again         ; variable_low >= end_low, continue
+    
+next_loop_again:
+    ; Jump back to FOR statement
+    ldy #5
+    lda ($3A),y             ; FOR address low
+    sta interp_pc
+    ldy #6
+    lda ($3A),y             ; FOR address high
+    sta interp_pc+1
+    
+    ; Restore FOR depth for next iteration
+    inc for_depth
+    
+    jmp next_done
+    
+next_error:
+    ; NEXT without FOR - skip to next statement
+    jsr skip_to_newline
+    inc interp_pc
+    
+next_done:
     ply
     plx
     pla

@@ -88,3 +88,25 @@ test_7:
     !byte TOKEN_DELIMITER, DELIM_NEWLINE
     !byte KW_END
 
+
+; Test 8: FOR/NEXT loop
+; Line 10: FOR I=1 TO 3
+; Line 20: PRINT I
+; Line 30: NEXT I
+test_8:
+    !byte TOKEN_NUMBER, $00, $0A        ; Line number 10
+    !byte KW_FOR, TOKEN_VARIABLE, $08   ; FOR I (variable index 8)
+    !byte TOKEN_OPERATOR, OP_EQUAL      ; =
+    !byte TOKEN_NUMBER, $00, $01        ; 1
+    ; Next is end value
+    !byte TOKEN_NUMBER, $00, $03        ; 3
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    
+    !byte TOKEN_NUMBER, $00, $14        ; Line number 20
+    !byte KW_PRINT, TOKEN_VARIABLE, $08 ; PRINT I
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    
+    !byte TOKEN_NUMBER, $00, $1E        ; Line number 30
+    !byte KW_NEXT, TOKEN_VARIABLE, $08  ; NEXT I
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    !byte KW_END

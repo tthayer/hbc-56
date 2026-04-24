@@ -148,20 +148,34 @@ apply_operator:
     cmp #OP_MULTIPLY
     beq do_multiply
     cmp #OP_DIVIDE
-    beq do_divide
+    bne check_equal
+    jmp do_divide
+check_equal:
     cmp #OP_EQUAL
-    beq do_equal
+    bne check_less
+    jmp do_equal
+check_less:
     cmp #OP_LESS
-    beq do_less
+    bne check_greater
+    jmp do_less
+check_greater:
     cmp #OP_GREATER
-    beq do_greater
+    bne check_le
+    jmp do_greater
+check_le:
     cmp #OP_LE
-    beq do_le
+    bne check_ge
+    jmp do_le
+check_ge:
     cmp #OP_GE
-    beq do_ge
+    bne check_ne
+    jmp do_ge
+check_ne:
     cmp #OP_NE
-    beq do_ne
+    bne unknown_op
+    jmp do_ne
     
+unknown_op:
     ; Unknown operator: return left operand unchanged
     ldx eval_left_x
     lda eval_left_a
@@ -286,90 +300,127 @@ do_equal:
     ; Compare left == right
     lda eval_left_x
     cmp eval_right_x
-    bne comp_false
+    bne eq_false
     lda eval_left_a
     cmp eval_right_a
-    bne comp_false
+    bne eq_false
     ; Equal: return 1
     ldx #0
     lda #1
+    jmp apply_done
+eq_false:
+    ldx #0
+    lda #0
     jmp apply_done
     
 do_less:
     ; Compare left < right
     lda eval_left_x
     cmp eval_right_x
-    bcc comp_true           ; left_high < right_high
-    bne comp_false          ; left_high > right_high
+    bcc lt_true             ; left_high < right_high
+    bne lt_false            ; left_high > right_high
     ; High bytes equal, check low bytes
     lda eval_left_a
     cmp eval_right_a
-    bcc comp_true           ; left_low < right_low
-    jmp comp_false
+    bcc lt_true             ; left_low < right_low
+    bra lt_false
+    
+lt_true:
+    ldx #0
+    lda #1
+    jmp apply_done
+lt_false:
+    ldx #0
+    lda #0
+    jmp apply_done
     
 do_greater:
     ; Compare left > right
     lda eval_left_x
     cmp eval_right_x
-    bcc comp_false          ; left_high < right_high
-    bne comp_true           ; left_high > right_high
+    bcc gt_false            ; left_high < right_high
+    bne gt_true             ; left_high > right_high
     ; High bytes equal, check low bytes
     lda eval_left_a
     cmp eval_right_a
-    bcc comp_false          ; left_low < right_low
-    beq comp_false          ; left_low == right_low
+    bcc gt_false            ; left_low < right_low
+    beq gt_false            ; left_low == right_low
     ; left_low > right_low
     ldx #0
     lda #1
+    jmp apply_done
+    
+gt_true:
+    ldx #0
+    lda #1
+    jmp apply_done
+gt_false:
+    ldx #0
+    lda #0
     jmp apply_done
     
 do_le:
     ; Compare left <= right
     lda eval_left_x
     cmp eval_right_x
-    bcc comp_true           ; left_high < right_high
-    bne comp_false          ; left_high > right_high
+    bcc le_true             ; left_high < right_high
+    bne le_false            ; left_high > right_high
     ; High bytes equal, check low bytes
     lda eval_left_a
     cmp eval_right_a
-    bcc comp_true           ; left_low < right_low
-    beq comp_true           ; left_low == right_low
-    jmp comp_false
+    bcc le_true             ; left_low < right_low
+    beq le_true             ; left_low == right_low
+    bra le_false
+    
+le_true:
+    ldx #0
+    lda #1
+    jmp apply_done
+le_false:
+    ldx #0
+    lda #0
+    jmp apply_done
     
 do_ge:
     ; Compare left >= right
     lda eval_left_x
     cmp eval_right_x
-    bcc comp_false          ; left_high < right_high
-    bne comp_true           ; left_high > right_high
+    bcc ge_false            ; left_high < right_high
+    bne ge_true             ; left_high > right_high
     ; High bytes equal, check low bytes
     lda eval_left_a
     cmp eval_right_a
-    bcc comp_false          ; left_low < right_low
+    bcc ge_false            ; left_low < right_low
     ; left_low >= right_low
     ldx #0
     lda #1
+    jmp apply_done
+    
+ge_true:
+    ldx #0
+    lda #1
+    jmp apply_done
+ge_false:
+    ldx #0
+    lda #0
     jmp apply_done
     
 do_ne:
     ; Compare left != right
     lda eval_left_x
     cmp eval_right_x
-    bne comp_true           ; high bytes differ
+    bne ne_true             ; high bytes differ
     lda eval_left_a
     cmp eval_right_a
-    bne comp_true           ; low bytes differ
+    bne ne_true             ; low bytes differ
     ; Values are equal, so != is false
-    jmp comp_false
-    
-comp_true:
-    ldx #0
-    lda #1
-    jmp apply_done
-    
-comp_false:
     ldx #0
     lda #0
+    jmp apply_done
+    
+ne_true:
+    ldx #0
+    lda #1
     jmp apply_done
     
 apply_done:
