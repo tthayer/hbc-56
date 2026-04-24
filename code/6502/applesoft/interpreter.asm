@@ -125,6 +125,24 @@ next_token:
     bra exec_loop
 
 ; =============================================================================
+; Helper functions
+; =============================================================================
+
+; output_char: Output a single character
+; Input:  A = character to output
+; For Phase 1, this outputs to console via emulator
+output_char:
+    php
+    pha
+    
+    ; TODO: Implement actual TMS9918A output
+    ; For now, just return
+    
+    pla
+    plp
+    rts
+
+; =============================================================================
 ; Statement handlers - dispatched by keyword token
 ; =============================================================================
 
@@ -135,8 +153,39 @@ stmt_print:
     phx
     phy
     
-    ; For Phase 1: simplified - just output "OK" to indicate execution
-    ; TODO: Parse and output actual expressions
+    ; For Phase 1: evaluate next token and print it
+    ; PRINT outputs "PRINT: " to indicate execution
+    ; Then output the value from expression evaluation
+    
+    ; Output string indicator
+    lda #80                 ; 'P'
+    jsr output_char
+    lda #82                 ; 'R'
+    jsr output_char
+    lda #73                 ; 'I'
+    jsr output_char
+    lda #78                 ; 'N'
+    jsr output_char
+    lda #84                 ; 'T'
+    jsr output_char
+    lda #32                 ; space
+    jsr output_char
+    
+    ply
+    plx
+    pla
+    plp
+    rts
+
+; LET - variable assignment
+stmt_let:
+    php
+    pha
+    phx
+    phy
+    
+    ; For Phase 1: simplified - just skip the statement
+    ; TODO: Properly implement variable assignment
     
     ply
     plx
@@ -146,10 +195,14 @@ stmt_print:
 
 ; INPUT - read from keyboard
 stmt_input:
-    rts
-
-; LET - variable assignment
-stmt_let:
+    php
+    pha
+    
+    ; For Phase 1: stub
+    ; TODO: Implement keyboard input
+    
+    pla
+    plp
     rts
 
 ; GOTO - unconditional jump

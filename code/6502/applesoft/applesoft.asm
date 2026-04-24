@@ -14,6 +14,8 @@
 
 ; Include subsystems
 !src "tokenizer.asm"
+!src "expr_eval.asm"
+!src "vars.asm"
 !src "interpreter.asm"
 
 ; =============================================================================
