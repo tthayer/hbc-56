@@ -153,11 +153,10 @@ stmt_print:
     phx
     phy
     
-    ; For Phase 1: evaluate next token and print it
-    ; PRINT outputs "PRINT: " to indicate execution
-    ; Then output the value from expression evaluation
+    ; For Phase 1: evaluate next token and output it
+    ; Then skip to next statement
     
-    ; Output string indicator
+    ; Output "PRINT" indicator
     lda #80                 ; 'P'
     jsr output_char
     lda #82                 ; 'R'
@@ -169,6 +168,54 @@ stmt_print:
     lda #84                 ; 'T'
     jsr output_char
     lda #32                 ; space
+    jsr output_char
+    lda #58                 ; ':'
+    jsr output_char
+    lda #32                 ; space
+    jsr output_char
+    
+    ; Skip past the rest of PRINT statement
+    ; Next token after PRINT should be the value to print
+    inc interp_pc
+    
+    ; Get the token type
+    lda (interp_pc)
+    
+    ; Skip based on token type
+    cmp #TOKEN_NUMBER       ; $41 - number needs 2 more bytes
+    beq print_skip_number
+    cmp #TOKEN_STRING       ; $42 - string needs 1 more byte
+    beq print_skip_string
+    cmp #TOKEN_VARIABLE     ; $40 - variable needs 1 more byte
+    beq print_skip_variable
+    
+    ; Default: skip just the current byte
+    bra print_continue
+    
+print_skip_number:
+    inc interp_pc
+    inc interp_pc           ; Skip MSB and LSB
+    bra print_continue
+    
+print_skip_string:
+    inc interp_pc           ; Skip pool index
+    bra print_continue
+    
+print_skip_variable:
+    inc interp_pc           ; Skip variable index
+    bra print_continue
+    
+print_continue:
+    ; Next token should be delimiter (newline)
+    inc interp_pc
+    lda (interp_pc)         ; Should be TOKEN_DELIMITER
+    
+    ; Skip it
+    inc interp_pc
+    lda (interp_pc)         ; Delimiter type
+    
+    ; For now, output a newline character
+    lda #10                 ; LF
     jsr output_char
     
     ply
@@ -206,11 +253,75 @@ stmt_input:
     rts
 
 ; GOTO - unconditional jump
+; GOTO - unconditional jump to line number
 stmt_goto:
+    php
+    pha
+    phx
+    phy
+    
+    ; Next token should be line number
+    inc interp_pc
+    lda (interp_pc)
+    
+    ; Check if it's a number token
+    cmp #TOKEN_NUMBER
+    bne goto_error
+    
+    ; Get line number (next 2 bytes)
+    inc interp_pc
+    lda (interp_pc)         ; High byte of line number
+    sta work_b
+    inc interp_pc
+    lda (interp_pc)         ; Low byte
+    sta work_a
+    
+    ; Now search for this line number in the bytecode
+    ; Start from program_buffer ($1400)
+    lda #<program_buffer
+    sta tokenizer_ptr
+    lda #>program_buffer
+    sta tokenizer_ptr+1
+    
+    ; Scan through bytecode looking for matching line number
+    ; For Phase 1: simple linear scan
+    jsr find_line
+    
+    ; If found, update program counter
+    lda tokenizer_ptr
+    sta interp_pc
+    lda tokenizer_ptr+1
+    sta interp_pc+1
+    
+goto_error:
+    ply
+    plx
+    pla
+    plp
+    rts
+
+; find_line: Find a line number in bytecode
+; Input:  work_a:work_b = line number to find
+;         tokenizer_ptr = start address
+; Output: tokenizer_ptr = address if found
+; For Phase 1, stub implementation
+find_line:
     rts
 
 ; IF - conditional branch
 stmt_if:
+    php
+    pha
+    phx
+    phy
+    
+    ; Parse: IF expression THEN line_number
+    ; For Phase 1: simplified - just skip the statement
+    
+    ply
+    plx
+    pla
+    plp
     rts
 
 ; THEN - part of IF statement
@@ -219,18 +330,70 @@ stmt_then:
 
 ; FOR - start loop
 stmt_for:
+    php
+    pha
+    phx
+    phy
+    
+    ; FOR var = start TO end [STEP step]
+    ; For Phase 1: simplified - just skip the statement
+    ; TODO: Push loop context to FOR stack
+    
+    ply
+    plx
+    pla
+    plp
     rts
 
 ; NEXT - end loop
 stmt_next:
+    php
+    pha
+    phx
+    phy
+    
+    ; NEXT var
+    ; For Phase 1: simplified - just skip the statement
+    ; TODO: Pop loop context, check condition, jump back or continue
+    
+    ply
+    plx
+    pla
+    plp
     rts
 
 ; GOSUB - call subroutine
 stmt_gosub:
+    php
+    pha
+    phx
+    phy
+    
+    ; GOSUB line_number
+    ; For Phase 1: simplified - just skip
+    ; TODO: Push return address to GOSUB stack, jump to line
+    
+    ply
+    plx
+    pla
+    plp
     rts
 
 ; RETURN - return from subroutine
 stmt_return:
+    php
+    pha
+    phx
+    phy
+    
+    ; Return to caller
+    ; For Phase 1: simplified - just skip
+    ; TODO: Pop return address from GOSUB stack
+    
+    ply
+    plx
+    pla
+    plp
     rts
 
 ; REM - comment (already skipped by tokenizer)
