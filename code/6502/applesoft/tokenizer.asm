@@ -10,32 +10,6 @@ tokenizer_out      = $22   ; Output pointer (16-bit)
 work_a             = $24   ; General work byte
 work_b             = $25   ; General work byte
 
-; Keyword token values
-KW_PRINT           = $00
-KW_INPUT           = $01
-KW_LET             = $02
-KW_GOTO            = $03
-KW_IF              = $04
-KW_THEN            = $05
-KW_FOR             = $06
-KW_NEXT            = $07
-KW_GOSUB           = $08
-KW_RETURN          = $09
-KW_REM             = $0A
-KW_END             = $0B
-KW_RUN             = $0C
-KW_NEW             = $0D
-KW_PLOT            = $0E
-KW_COLOR           = $0F
-
-; Token type values
-TOKEN_KEYWORD      = $00
-TOKEN_VARIABLE     = $40
-TOKEN_NUMBER       = $41
-TOKEN_STRING       = $42
-TOKEN_OPERATOR     = $43
-TOKEN_DELIMITER    = $44
-
 ; =============================================================================
 ; tokenize_line: Parse a line of BASIC text
 ; Input:  $20/$21 = input pointer

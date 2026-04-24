@@ -9,6 +9,9 @@
 
 *=$8000
 
+; Include token definitions
+!src "tokens.inc"
+
 ; Include subsystems
 !src "tokenizer.asm"
 !src "interpreter.asm"
@@ -19,6 +22,12 @@
 
 ; Initialize Applesoft interpreter
 jsr applesoft_init
+
+; Load test program
+lda #<(program_buffer)
+sta interp_pc
+lda #>(program_buffer)
+sta interp_pc+1
 
 ; Run interpreter on bytecode
 jsr interpret
@@ -44,6 +53,9 @@ applesoft_init:
     pla
     plp
     rts
+
+; Include test programs
+!src "tests.asm"
 
 ; Interrupt vectors
 *=$FFFA

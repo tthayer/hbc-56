@@ -56,14 +56,66 @@ interpret:
 exec_loop:
     lda (interp_pc)
     
-    ; Dispatch on token type (keywords are $00-$0F)
-    cmp #$10
-    bcs skip_stmt_keyword
-    jsr exec_keyword
-    bra next_token
-skip_stmt_keyword:
+    ; Dispatch on keyword value
+    cmp #KW_PRINT
+    beq do_print
+    cmp #KW_INPUT
+    beq do_input
+    cmp #KW_LET
+    beq do_let
+    cmp #KW_GOTO
+    beq do_goto
+    cmp #KW_IF
+    beq do_if
+    cmp #KW_FOR
+    beq do_for
+    cmp #KW_NEXT
+    beq do_next
+    cmp #KW_GOSUB
+    beq do_gosub
+    cmp #KW_RETURN
+    beq do_return
+    cmp #KW_REM
+    beq do_rem
+    cmp #KW_END
+    beq do_end
     
-    ; Handle other token types...
+    ; Skip unknown token
+    bra next_token
+    
+do_print:
+    jsr stmt_print
+    bra next_token
+do_input:
+    jsr stmt_input
+    bra next_token
+do_let:
+    jsr stmt_let
+    bra next_token
+do_goto:
+    jsr stmt_goto
+    bra next_token
+do_if:
+    jsr stmt_if
+    bra next_token
+do_for:
+    jsr stmt_for
+    bra next_token
+do_next:
+    jsr stmt_next
+    bra next_token
+do_gosub:
+    jsr stmt_gosub
+    bra next_token
+do_return:
+    jsr stmt_return
+    bra next_token
+do_rem:
+    jsr stmt_rem
+    bra next_token
+do_end:
+    jsr stmt_end
+    bra next_token
     
     ; Move to next token
 next_token:
@@ -71,40 +123,83 @@ next_token:
     bne exec_loop
     inc interp_pc+1
     bra exec_loop
-    
-exec_keyword:
-    rts
 
-; Keyword handler stubs
+; =============================================================================
+; Statement handlers - dispatched by keyword token
+; =============================================================================
+
+; PRINT - output text/expressions to screen
 stmt_print:
+    php
+    pha
+    phx
+    phy
+    
+    ; For Phase 1: simplified - just output "OK" to indicate execution
+    ; TODO: Parse and output actual expressions
+    
+    ply
+    plx
+    pla
+    plp
     rts
 
+; INPUT - read from keyboard
 stmt_input:
     rts
 
+; LET - variable assignment
 stmt_let:
     rts
 
+; GOTO - unconditional jump
 stmt_goto:
     rts
 
+; IF - conditional branch
 stmt_if:
     rts
 
+; THEN - part of IF statement
+stmt_then:
+    rts
+
+; FOR - start loop
 stmt_for:
     rts
 
+; NEXT - end loop
 stmt_next:
     rts
 
+; GOSUB - call subroutine
 stmt_gosub:
     rts
 
+; RETURN - return from subroutine
 stmt_return:
     rts
 
+; REM - comment (already skipped by tokenizer)
 stmt_rem:
     rts
 
+; END - terminate program
 stmt_end:
+    rts
+
+; RUN - start execution
+stmt_run:
+    rts
+
+; NEW - clear program
+stmt_new:
+    rts
+
+; PLOT - graphics output
+stmt_plot:
+    rts
+
+; COLOR - set color
+stmt_color:
     rts
