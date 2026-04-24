@@ -45,3 +45,46 @@ test_4:
     !byte TOKEN_DELIMITER, DELIM_NEWLINE
     !byte KW_END
 
+; Test 5: GOTO jump
+; Line 10: GOTO 20
+; Line 20: PRINT 42
+test_5:
+    !byte TOKEN_NUMBER, $00, $0A        ; Line number 10
+    !byte KW_GOTO, TOKEN_NUMBER, $00, $14 ; GOTO 20
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    !byte TOKEN_NUMBER, $00, $14        ; Line number 20
+    !byte KW_PRINT, TOKEN_NUMBER, $00, $2A
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    !byte KW_END
+
+; Test 6: IF/THEN true branch
+; Line 10: IF 1 THEN 20
+; Line 20: PRINT 42
+test_6:
+    !byte TOKEN_NUMBER, $00, $0A        ; Line number 10
+    !byte KW_IF, TOKEN_NUMBER, $00, $01 ; IF 1 (true)
+    !byte TOKEN_OPERATOR, OP_EQUAL      ; Just a dummy operator to test condition evaluation
+    !byte TOKEN_NUMBER, $00, $01        ; = 1
+    !byte KW_THEN, TOKEN_NUMBER, $00, $14 ; THEN 20
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    !byte TOKEN_NUMBER, $00, $14        ; Line number 20
+    !byte KW_PRINT, TOKEN_NUMBER, $00, $2A
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    !byte KW_END
+
+; Test 7: IF/THEN false branch (skip)
+; Line 10: IF 0 THEN 20
+; Line 10: PRINT 99 (0x63)
+; Line 20: PRINT 42 (skipped)
+test_7:
+    !byte TOKEN_NUMBER, $00, $0A        ; Line number 10
+    !byte KW_IF, TOKEN_NUMBER, $00, $00 ; IF 0 (false)
+    !byte KW_THEN, TOKEN_NUMBER, $00, $14 ; THEN 20
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    !byte KW_PRINT, TOKEN_NUMBER, $00, $63 ; PRINT 99
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    !byte TOKEN_NUMBER, $00, $14        ; Line number 20
+    !byte KW_PRINT, TOKEN_NUMBER, $00, $2A
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    !byte KW_END
+

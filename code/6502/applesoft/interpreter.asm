@@ -402,23 +402,178 @@ goto_error:
     rts
 
 ; find_line: Find a line number in bytecode
-; Input:  work_a:work_b = line number to find
+; Input:  work_a:work_b = line number to find (low:high)
 ;         tokenizer_ptr = start address
-; Output: tokenizer_ptr = address if found
-; For Phase 1, stub implementation
+; Output: tokenizer_ptr = address of statement after the matching line number
+; Returns with carry clear if found, set if not found
 find_line:
+    php
+    pha
+    phx
+    phy
+    
+    ; Loop through bytecode looking for line number match
+find_line_loop:
+    lda (tokenizer_ptr)     ; Get next token
+    
+    ; End of program?
+    cmp #KW_END
+    beq find_line_not_found
+    
+    ; Is this a line number (TOKEN_NUMBER)?
+    cmp #TOKEN_NUMBER
+    bne find_line_skip_to_next
+    
+    ; Found a line number token - check if it matches
+    inc tokenizer_ptr
+    lda (tokenizer_ptr)     ; High byte of line number
+    cmp work_b
+    bne find_line_skip_to_next
+    
+    ; High byte matches - check low byte
+    inc tokenizer_ptr
+    lda (tokenizer_ptr)     ; Low byte of line number
+    cmp work_a
+    beq find_line_found     ; Both bytes match!
+    
+    ; Not a match - skip to next line (skip the line number, then statement)
+find_line_skip_to_next:
+    ; We might have partially consumed tokens, sync up
+    ; For safety, scan forward until we hit a NEWLINE delimiter
+    
+skip_to_next_line:
+    lda (tokenizer_ptr)
+    cmp #TOKEN_DELIMITER
+    bne skip_forward
+    inc tokenizer_ptr
+    lda (tokenizer_ptr)
+    cmp #DELIM_NEWLINE
+    beq found_next_line
+    bra skip_to_next_line
+    
+skip_forward:
+    inc tokenizer_ptr
+    bra skip_to_next_line
+    
+found_next_line:
+    ; Move past the NEWLINE token
+    inc tokenizer_ptr
+    ; Loop back to check next statement
+    bra find_line_loop
+    
+find_line_found:
+    ; Found it! Move to the next token (past the line number)
+    inc tokenizer_ptr
+    
+    ply
+    plx
+    pla
+    plp
+    clc                     ; Carry clear = found
+    rts
+    
+find_line_not_found:
+    ply
+    plx
+    pla
+    plp
+    sec                     ; Carry set = not found
+    rts
+
+; skip_to_newline: Skip tokens until NEWLINE delimiter found
+; Input:  interp_pc = current position
+; Output: interp_pc = positioned at NEWLINE token
+skip_to_newline:
+    php
+    pha
+    
+skip_newline_loop:
+    lda (interp_pc)
+    cmp #TOKEN_DELIMITER
+    bne skip_newline_advance
+    
+    ; Check if this is a NEWLINE
+    inc interp_pc
+    lda (interp_pc)
+    cmp #DELIM_NEWLINE
+    beq skip_newline_done
+    
+    ; Not a newline, continue
+    jmp skip_newline_loop
+    
+skip_newline_advance:
+    inc interp_pc
+    jmp skip_newline_loop
+    
+skip_newline_done:
+    ; interp_pc is at the NEWLINE token
+    pla
+    plp
     rts
 
 ; IF - conditional branch
+; Format: IF expression THEN line_number
 stmt_if:
     php
     pha
     phx
     phy
     
-    ; Parse: IF expression THEN line_number
-    ; For Phase 1: simplified - just skip the statement
+    ; Current token is KW_IF, next should be expression
+    inc interp_pc
     
+    ; Evaluate the condition expression
+    jsr eval_expr
+    
+    ; Result in X:A (X=high, A=low)
+    ; For comparison operators, return is 0 (false) or 1 (true)
+    ; Check if expression is non-zero (true)
+    ora eval_left_x         ; A |= X to check if either byte is nonzero
+    beq if_skip             ; If zero, skip the THEN clause
+    
+    ; Expression is true - look for THEN
+    lda (interp_pc)
+    cmp #KW_THEN
+    bne if_skip             ; No THEN, just skip
+    
+    inc interp_pc           ; Skip past THEN
+    
+    ; Next should be line number to jump to
+    lda (interp_pc)
+    cmp #TOKEN_NUMBER
+    bne if_skip
+    
+    ; Get line number
+    inc interp_pc
+    lda (interp_pc)         ; High byte
+    sta work_b
+    inc interp_pc
+    lda (interp_pc)         ; Low byte
+    sta work_a
+    
+    ; Search for this line number
+    lda #<program_buffer
+    sta tokenizer_ptr
+    lda #>program_buffer
+    sta tokenizer_ptr+1
+    
+    jsr find_line
+    
+    ; If found, update program counter
+    lda tokenizer_ptr
+    sta interp_pc
+    lda tokenizer_ptr+1
+    sta interp_pc+1
+    
+    jmp if_done
+    
+if_skip:
+    ; Expression is false or no THEN - skip to next line
+    ; Scan forward until we hit a NEWLINE
+    jsr skip_to_newline
+    inc interp_pc           ; Move past the NEWLINE
+    
+if_done:
     ply
     plx
     pla
