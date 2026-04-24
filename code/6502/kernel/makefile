@@ -20,7 +20,7 @@ space:= $(null) #
 CONFID:= $(subst $(space),_,$(strip $(CONF))).conf
 
 $(CONFID):
-	$(RM) *.conf
+	$(RM) -f *.conf
 	echo $(CONF) > $(CONFID)
 
 kernel.o: kernel.asm  \
