@@ -110,3 +110,26 @@ test_8:
     !byte KW_NEXT, TOKEN_VARIABLE, $08  ; NEXT I
     !byte TOKEN_DELIMITER, DELIM_NEWLINE
     !byte KW_END
+
+; Test 9: GOSUB/RETURN subroutine call
+; Line 10: GOSUB 30
+; Line 20: PRINT 99 (should execute after RETURN)
+; Line 30: PRINT 42 (subroutine)
+; Line 40: RETURN
+test_9:
+    !byte TOKEN_NUMBER, $00, $0A        ; Line number 10
+    !byte KW_GOSUB, TOKEN_NUMBER, $00, $1E ; GOSUB 30
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    
+    !byte TOKEN_NUMBER, $00, $14        ; Line number 20
+    !byte KW_PRINT, TOKEN_NUMBER, $00, $63 ; PRINT 99
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    
+    !byte TOKEN_NUMBER, $00, $1E        ; Line number 30
+    !byte KW_PRINT, TOKEN_NUMBER, $00, $2A ; PRINT 42
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    
+    !byte TOKEN_NUMBER, $00, $28        ; Line number 40
+    !byte KW_RETURN                     ; RETURN
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    !byte KW_END

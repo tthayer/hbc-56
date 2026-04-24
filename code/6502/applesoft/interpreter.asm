@@ -908,16 +908,68 @@ next_done:
     rts
 
 ; GOSUB - call subroutine
+; Format: GOSUB line_number
+; Push return address to gosub_stack, jump to line
 stmt_gosub:
     php
     pha
     phx
     phy
     
-    ; GOSUB line_number
-    ; For Phase 1: simplified - just skip
-    ; TODO: Push return address to GOSUB stack, jump to line
+    ; Check gosub depth (max 32 return addresses = 64 bytes)
+    lda gosub_depth
+    cmp #32
+    bcs gosub_overflow
     
+    ; Save return address (next statement address) to gosub_stack
+    lda gosub_depth
+    asl                     ; * 2 for word offset
+    tay
+    lda interp_pc           ; Current PC (will be advanced to next statement)
+    sta gosub_stack,y
+    lda interp_pc+1
+    sta gosub_stack+1,y
+    
+    ; Increment gosub_depth
+    inc gosub_depth
+    
+    ; Parse: GOSUB line_number
+    inc interp_pc           ; Skip KW_GOSUB
+    lda (interp_pc)
+    cmp #TOKEN_NUMBER
+    bne gosub_error
+    
+    ; Get line number
+    inc interp_pc
+    lda (interp_pc)         ; High byte
+    sta work_b
+    inc interp_pc
+    lda (interp_pc)         ; Low byte
+    sta work_a
+    
+    ; Search for line
+    lda #<program_buffer
+    sta tokenizer_ptr
+    lda #>program_buffer
+    sta tokenizer_ptr+1
+    
+    jsr find_line
+    
+    ; Update program counter
+    lda tokenizer_ptr
+    sta interp_pc
+    lda tokenizer_ptr+1
+    sta interp_pc+1
+    
+    jmp gosub_done
+    
+gosub_overflow:
+gosub_error:
+    ; GOSUB stack overflow or parse error - skip to next statement
+    jsr skip_to_newline
+    inc interp_pc
+    
+gosub_done:
     ply
     plx
     pla
@@ -931,10 +983,35 @@ stmt_return:
     phx
     phy
     
-    ; Return to caller
-    ; For Phase 1: simplified - just skip
-    ; TODO: Pop return address from GOSUB stack
+    ; Check if we have a return address (gosub_depth > 0)
+    lda gosub_depth
+    beq return_error
     
+    ; Decrement gosub_depth
+    dec gosub_depth
+    
+    ; Load return address
+    lda gosub_depth
+    asl                     ; * 2 for word offset
+    tay
+    lda gosub_stack,y
+    sta interp_pc
+    lda gosub_stack+1,y
+    sta interp_pc+1
+    
+    ; Skip past the NEWLINE of the return line
+    ; Actually, interp_pc should point to next statement already
+    ; Just move to the next token
+    inc interp_pc           ; Skip past whatever is at current address
+    
+    jmp return_done
+    
+return_error:
+    ; RETURN without GOSUB - skip to next statement
+    jsr skip_to_newline
+    inc interp_pc
+    
+return_done:
     ply
     plx
     pla
