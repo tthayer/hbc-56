@@ -1,13 +1,12 @@
 ; Applesoft BASIC for HBC-56 - Expression Evaluator
 ;
-; Evaluates bytecode expressions with operator precedence
+; Evaluates bytecode expressions with 16-bit arithmetic
 ; Input: bytecode stream at (interp_pc)
 ; Output: 16-bit result in X (high) / A (low)
-;
 
 ; =============================================================================
-; eval_expr: Evaluate a single expression
-; Input:  (interp_pc) = bytecode starting with expression
+; eval_expr: Evaluate a complete expression (left-to-right)
+; Input:  (interp_pc) = bytecode token (start of expression)
 ; Output: X = high byte, A = low byte of result
 ;         interp_pc advanced past expression
 ; =============================================================================
@@ -17,11 +16,45 @@ eval_expr:
     phx
     phy
     
-    ; Start with primary (operand or parenthesized expression)
+    ; Get left operand (primary value or expression)
     jsr eval_primary
     
-    ; X has high byte, A has low byte
-    ; Now check for operators at same precedence level
+    ; Store left operand
+    sta eval_left_a
+    stx eval_left_x
+    
+eval_expr_loop:
+    ; Check if next token is an operator
+    lda (interp_pc)
+    cmp #TOKEN_OPERATOR
+    bne eval_expr_done
+    
+    ; Save operator type (next byte after TOKEN_OPERATOR)
+    inc interp_pc
+    lda (interp_pc)
+    sta eval_op
+    
+    ; Get right operand
+    inc interp_pc
+    jsr eval_primary
+    sta eval_right_a
+    stx eval_right_x
+    
+    ; Apply operator to left operand with right operand
+    jsr apply_operator
+    
+    ; Result now in X:A, save as new left operand
+    sta eval_left_a
+    stx eval_left_x
+    
+    ; Continue looping for more operators (left-to-right evaluation)
+    inc interp_pc
+    bra eval_expr_loop
+    
+eval_expr_done:
+    ; Return final result
+    ldx eval_left_x
+    lda eval_left_a
     
     ply
     plx
@@ -32,7 +65,8 @@ eval_expr:
 ; =============================================================================
 ; eval_primary: Parse a primary value (literal, variable, or (expr))
 ; Input:  (interp_pc) = bytecode token
-; Output: X = high byte, A = low byte
+; Output: X = high byte, A = low byte of value
+;         interp_pc NOT advanced (caller does it)
 ; =============================================================================
 eval_primary:
     php
@@ -40,7 +74,7 @@ eval_primary:
     phx
     phy
     
-    lda (interp_pc)         ; Get token
+    lda (interp_pc)         ; Get token type
     
     ; Check token type
     cmp #TOKEN_NUMBER       ; $41 = 16-bit number
@@ -52,51 +86,38 @@ eval_primary:
     cmp #TOKEN_STRING       ; $42 = string (evaluate to 0)
     beq primary_string
     
-    cmp #DELIM_LPAREN       ; $44,$02 = (expr)
-    beq primary_paren
-    
     ; Default: return 0
     ldx #0
     lda #0
-    bra primary_done
+    jmp primary_done
     
 primary_number:
-    ; TOKEN_NUMBER: next byte is MSB, then LSB
+    ; TOKEN_NUMBER: [TOKEN_NUMBER][MSB][LSB]
     inc interp_pc
     lda (interp_pc)         ; MSB
     tax
     inc interp_pc
     lda (interp_pc)         ; LSB
-    bra primary_done
+    jmp primary_done
     
 primary_variable:
-    ; TOKEN_VARIABLE: next byte is variable index
+    ; TOKEN_VARIABLE: [TOKEN_VARIABLE][var_index]
+    ; Look up variable value from table at $0200
     inc interp_pc
     lda (interp_pc)         ; Variable index (0-31)
-    ; Look up variable value
-    ; For Phase 1: simple lookup in variable table at $0200
-    ; Each variable is 2 bytes (high byte first)
     asl                     ; *2 for byte offset
     tax
     lda $0200, x            ; High byte
     pha
     lda $0201, x            ; Low byte
-    plx
-    bra primary_done
+    tax                     ; Move to X for return
+    pla                     ; Get high byte back
+    jmp primary_done
     
 primary_string:
     ; Strings evaluate to 0
     ldx #0
     lda #0
-    bra primary_done
-    
-primary_paren:
-    ; Parenthesized expression: skip '(' and recurse
-    inc interp_pc
-    jsr eval_expr           ; Recursively evaluate
-    ; Skip closing ')'
-    inc interp_pc
-    bra primary_done
     
 primary_done:
     ply
@@ -106,46 +127,149 @@ primary_done:
     rts
 
 ; =============================================================================
-; eval_expr_prec: Evaluate expression with operator precedence
-; For Phase 1, simplified operator handling
-; Input:  X:A = left operand
-; Output: X:A = result
+; apply_operator: Apply binary operator to operands
+; Input:  eval_op = operator type (OP_PLUS, OP_MINUS, etc.)
+;         eval_left_a, eval_left_x = left operand
+;         eval_right_a, eval_right_x = right operand
+; Output: X = high byte, A = low byte of result
 ; =============================================================================
-eval_expr_prec:
+apply_operator:
     php
     pha
     phx
     phy
     
-    ; Stack the result for now
-    sta work_a              ; Save low byte
-    stx work_b              ; Save high byte
+    lda eval_op
     
-    ; Check for operator at (interp_pc)
-    inc interp_pc
-    lda (interp_pc)
+    cmp #OP_PLUS
+    beq do_add
+    cmp #OP_MINUS
+    beq do_subtract
+    cmp #OP_MULTIPLY
+    beq do_multiply
+    cmp #OP_DIVIDE
+    beq do_divide
     
-    cmp #TOKEN_OPERATOR     ; $43 = operator token
-    bne eval_expr_prec_done
+    ; Unknown operator: return left operand unchanged
+    ldx eval_left_x
+    lda eval_left_a
+    jmp apply_done
     
-    ; Get operator type
-    inc interp_pc
-    lda (interp_pc)         ; Operator type
+do_add:
+    ; 16-bit addition: left + right
+    clc
+    lda eval_left_a
+    adc eval_right_a
+    sta eval_left_a
+    lda eval_left_x
+    adc eval_right_x
+    sta eval_left_x
+    ldx eval_left_x
+    lda eval_left_a
+    jmp apply_done
     
-    ; For Phase 1: handle simple binary operators
-    ; Result is in work_a:work_b (16-bit)
+do_subtract:
+    ; 16-bit subtraction: left - right
+    sec
+    lda eval_left_a
+    sbc eval_right_a
+    sta eval_left_a
+    lda eval_left_x
+    sbc eval_right_x
+    sta eval_left_x
+    ldx eval_left_x
+    lda eval_left_a
+    jmp apply_done
     
-    ; Get right operand
-    inc interp_pc
-    jsr eval_primary        ; Right operand in X:A
+do_multiply:
+    ; 16-bit multiply: For Phase 1, simple 8-bit multiply using repeated addition
+    ; result = left * right (simplified: assume left and right are < 256)
     
-    ; Compare with saved operator type and apply
-    ; For now, just return left operand unchanged
+    lda #0
+    sta $34                 ; result_high = 0
+    sta $35                 ; result_low = 0
     
-eval_expr_prec_done:
-    ldx work_b
-    lda work_a
+    ldx eval_left_a         ; X = counter (how many times to add right)
+    beq multiply_done
     
+multiply_loop:
+    clc
+    lda $35
+    adc eval_right_a
+    sta $35
+    lda $34
+    adc eval_right_x
+    sta $34
+    dex
+    bne multiply_loop
+    
+multiply_done:
+    ldx $34
+    lda $35
+    jmp apply_done
+    
+do_divide:
+    ; 16-bit divide: Simple repeated subtraction
+    ; Check for zero divisor
+    lda eval_right_a
+    ora eval_right_x
+    beq divide_zero
+    
+    ; Initialize quotient and remainder
+    lda #0
+    sta $34                 ; quotient_high = 0
+    sta $35                 ; quotient_low = 0
+    
+    ; Copy dividend to remainder
+    lda eval_left_a
+    sta $36                 ; remainder_low
+    lda eval_left_x
+    sta $37                 ; remainder_high
+    
+divide_loop:
+    ; Check if remainder < divisor
+    lda $37
+    cmp eval_right_x
+    bcc divide_done
+    beq divide_check_low
+    bcs divide_again
+    
+divide_check_low:
+    lda $36
+    cmp eval_right_a
+    bcc divide_done
+    
+divide_again:
+    ; Subtract divisor from remainder
+    sec
+    lda $36
+    sbc eval_right_a
+    sta $36
+    lda $37
+    sbc eval_right_x
+    sta $37
+    
+    ; Increment quotient
+    clc
+    lda $35
+    adc #1
+    sta $35
+    bcc divide_loop
+    inc $34
+    bra divide_loop
+    
+divide_zero:
+    ; Division by zero: return 0
+    lda #0
+    sta $34
+    sta $35
+    
+divide_done:
+    ldx $34
+    lda $35
+    jmp apply_done
+    
+apply_done:
     ply
     plx
     pla

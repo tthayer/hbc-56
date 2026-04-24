@@ -28,3 +28,13 @@ test_3:
     !byte KW_PRINT, TOKEN_VARIABLE, $00
     !byte TOKEN_DELIMITER, DELIM_NEWLINE
     !byte KW_END
+
+; Test 4: PRINT 2+3
+; Bytecode: PRINT number(2) + number(3)
+test_4:
+    !byte KW_PRINT, TOKEN_NUMBER, $00, $02
+    !byte TOKEN_OPERATOR, OP_PLUS
+    !byte TOKEN_NUMBER, $00, $03
+    !byte TOKEN_DELIMITER, DELIM_NEWLINE
+    !byte KW_END
+

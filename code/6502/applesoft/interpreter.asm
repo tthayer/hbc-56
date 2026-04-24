@@ -9,6 +9,11 @@ interp_sp          = $2A   ; Stack pointer
 for_depth          = $2B   ; FOR loop nesting depth
 gosub_depth        = $2C   ; GOSUB nesting depth
 current_stmt       = $2D   ; Current statement token
+eval_left_a        = $2E   ; Expression evaluator: left operand (low byte)
+eval_left_x        = $2F   ; Expression evaluator: left operand (high byte)
+eval_right_a       = $30   ; Expression evaluator: right operand (low byte)
+eval_right_x       = $31   ; Expression evaluator: right operand (high byte)
+eval_op            = $32   ; Expression evaluator: operator type
 
 ; Variable storage area
 *=$0200
@@ -142,6 +147,48 @@ output_char:
     plp
     rts
 
+; output_hex_byte: Output a single byte as two hex digits
+; Input:  A = byte to output
+output_hex_byte:
+    php
+    pha
+    
+    ; High nibble
+    lsr                     ; Shift right 4 times to get high nibble
+    lsr
+    lsr
+    lsr
+    jsr output_hex_digit
+    
+    ; Low nibble
+    pla
+    and #$0F                ; Mask low nibble
+    jsr output_hex_digit
+    
+    pla
+    plp
+    rts
+
+; output_hex_digit: Output a single hex digit (0-F)
+; Input:  A = nibble value (0-15)
+output_hex_digit:
+    php
+    pha
+    
+    cmp #10
+    bcc hex_digit_0_9
+    ; A-F
+    adc #55                 ; #'A' - 10 = 55
+    bra hex_output
+hex_digit_0_9:
+    adc #48                 ; #'0' = 48
+hex_output:
+    jsr output_char
+    
+    pla
+    plp
+    rts
+
 ; =============================================================================
 ; Statement handlers - dispatched by keyword token
 ; =============================================================================
@@ -153,10 +200,25 @@ stmt_print:
     phx
     phy
     
-    ; For Phase 1: evaluate next token and output it
-    ; Then skip to next statement
+    ; Evaluate the expression after PRINT
+    inc interp_pc
     
-    ; Output "PRINT" indicator
+    ; Evaluate the expression (could be number, variable, or computation)
+    jsr eval_expr
+    
+    ; Result is now in X (high) / A (low)
+    ; Store result for output
+    sta eval_left_a         ; Low byte
+    stx eval_left_x         ; High byte
+    
+    ; Output the result as a decimal number
+    ; For Phase 1: output as decimal text (simple approach)
+    
+    ; Get the 16-bit result back
+    lda eval_left_a
+    ldx eval_left_x
+    
+    ; Output "PRINT: " indicator
     lda #80                 ; 'P'
     jsr output_char
     lda #82                 ; 'R'
@@ -174,35 +236,20 @@ stmt_print:
     lda #32                 ; space
     jsr output_char
     
-    ; Skip past the rest of PRINT statement
-    ; Next token after PRINT should be the value to print
-    inc interp_pc
+    ; For now, output the result as hex: "0x1234"
+    ; Later phases can do proper decimal output
+    lda #48                 ; '0'
+    jsr output_char
+    lda #120                ; 'x'
+    jsr output_char
     
-    ; Get the token type
-    lda (interp_pc)
+    ; Output high byte (X contains high byte)
+    txa                     ; Transfer X to A
+    jsr output_hex_byte
     
-    ; Skip based on token type
-    cmp #TOKEN_NUMBER       ; $41 - number needs 2 more bytes
-    beq print_skip_number
-    cmp #TOKEN_STRING       ; $42 - string needs 1 more byte
-    beq print_skip_string
-    cmp #TOKEN_VARIABLE     ; $40 - variable needs 1 more byte
-    beq print_skip_variable
-    
-    ; Default: skip just the current byte
-    bra print_continue
-    
-print_skip_number:
-    inc interp_pc
-    inc interp_pc           ; Skip MSB and LSB
-    bra print_continue
-    
-print_skip_string:
-    inc interp_pc           ; Skip pool index
-    bra print_continue
-    
-print_skip_variable:
-    inc interp_pc           ; Skip variable index
+    ; Output low byte
+    lda eval_left_a
+    jsr output_hex_byte
     bra print_continue
     
 print_continue:
