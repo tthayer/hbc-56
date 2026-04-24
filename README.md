@@ -47,7 +47,60 @@ PICO-56 repository: [https://github.com/visrealm/pico-56](https://github.com/vis
 
 ## Building
 
-This project uses the CMAKE build system to build the emulator and assembler. VSCode works very well with CMAKE, but you can also build manually:
+This project uses the CMAKE build system to build the emulator and assembler. VSCode works very well with CMAKE, but you can also build manually.
+
+### Requirements
+
+All platforms require:
+- **CMake** 3.11 or later
+- **C compiler** (clang or gcc)
+- **C++ compiler** (clang++ or g++) with C++17 support
+- **Git** (with support for submodules)
+
+#### macOS
+
+On macOS, you can install requirements via Homebrew:
+
+```bash
+# Install Homebrew if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install required tools
+brew install cmake
+```
+
+The Xcode Command Line Tools (which includes clang and git) are required. If not already installed:
+```bash
+xcode-select --install
+```
+
+#### Linux
+
+Install the required build tools:
+```bash
+# Ubuntu/Debian
+sudo apt-get install build-essential cmake git
+
+# Fedora/RHEL
+sudo dnf install gcc g++ cmake git
+```
+
+#### Windows
+
+- Install **Visual Studio** with C++ support, or **Visual Studio Build Tools**
+- Install **CMake** from [cmake.org](https://cmake.org/download/)
+- Install **Git** from [git-scm.com](https://git-scm.com/)
+
+### macOS
+
+```bash
+$ git clone --recurse-submodules https://github.com/visrealm/hbc-56.git
+$ cd hbc-56
+$ cmake -B build -DCMAKE_BUILD_TYPE=Release -S .
+$ cmake --build build --config Release
+```
+
+The `hbc-56/build/bin` directory will then hold everything you need to run the emulator.
 
 ### Windows or Linux
 
