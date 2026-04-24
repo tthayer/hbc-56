@@ -278,9 +278,51 @@ stmt_let:
     phx
     phy
     
-    ; For Phase 1: simplified - just skip the statement
-    ; TODO: Properly implement variable assignment
+    ; Format: LET variable = expression
+    ; Bytecode: KW_LET, TOKEN_VARIABLE, var_index, TOKEN_OPERATOR, OP_EQUAL, [expression]
     
+    inc interp_pc
+    
+    ; Get variable index
+    lda (interp_pc)         ; Should be TOKEN_VARIABLE
+    cmp #TOKEN_VARIABLE
+    bne let_error
+    
+    inc interp_pc
+    lda (interp_pc)         ; Variable index
+    sta $33                 ; Save variable index for later
+    
+    ; Next should be TOKEN_OPERATOR with OP_EQUAL
+    inc interp_pc
+    lda (interp_pc)         ; Should be TOKEN_OPERATOR
+    cmp #TOKEN_OPERATOR
+    bne let_error
+    
+    inc interp_pc
+    lda (interp_pc)         ; Should be OP_EQUAL
+    cmp #OP_EQUAL
+    bne let_error
+    
+    ; Now evaluate the right-hand side expression
+    inc interp_pc
+    jsr eval_expr
+    
+    ; Result in X (high) / A (low)
+    ; Variable index in $33
+    ; Store result in variable table at $0200
+    pha                     ; Save low byte
+    txa                     ; Move high byte to A
+    ldx $33
+    asl                     ; *2 for 2-byte variable
+    tax
+    sta $0200, x            ; Store high byte at $0200+2*var_index
+    pla                     ; Restore low byte
+    sta $0201, x            ; Store low byte at $0201+2*var_index
+    
+    ; Skip to end of statement (next delimiter/newline)
+    ; eval_expr already advanced past the expression
+    
+let_error:
     ply
     plx
     pla
