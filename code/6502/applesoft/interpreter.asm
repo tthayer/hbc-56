@@ -61,6 +61,10 @@ interpret:
 exec_loop:
     lda (interp_pc)
     
+    ; Check if this is a line number (TOKEN_NUMBER at statement start)
+    cmp #TOKEN_NUMBER
+    beq skip_line_number
+    
     ; Dispatch on keyword value
     cmp #KW_PRINT
     beq do_print
@@ -87,6 +91,14 @@ exec_loop:
     
     ; Skip unknown token
     bra next_token
+    
+skip_line_number:
+    ; Line number is TOKEN_NUMBER (msb, lsb) - skip 3 bytes
+    ; Then loop back to get actual statement keyword
+    inc interp_pc
+    inc interp_pc
+    inc interp_pc
+    bra exec_loop
     
 do_print:
     jsr stmt_print
@@ -487,6 +499,33 @@ stmt_return:
 
 ; REM - comment (already skipped by tokenizer)
 stmt_rem:
+    php
+    pha
+    phx
+    phy
+    
+    ; REM statement: skip everything until newline
+    ; Keep scanning bytecode until we find NEWLINE
+    
+rem_loop:
+    inc interp_pc
+    lda (interp_pc)
+    
+    ; Check for end of line markers
+    cmp #TOKEN_DELIMITER
+    bne rem_loop
+    
+    ; Got a delimiter, check if it's newline
+    inc interp_pc
+    lda (interp_pc)
+    cmp #DELIM_NEWLINE
+    bne rem_loop
+    
+    ; Found newline, we're done
+    ply
+    plx
+    pla
+    plp
     rts
 
 ; END - terminate program
