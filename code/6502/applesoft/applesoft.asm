@@ -7,7 +7,6 @@
 !cpu w65c02
 !initmem $FF
 
-; Entry point at reset vector
 *=$8000
 
 ; Include subsystems
@@ -21,31 +20,33 @@
 ; Initialize Applesoft interpreter
 jsr applesoft_init
 
-; Run interpreter on bytecode (pre-loaded in ROM)
+; Run interpreter on bytecode
 jsr interpret
 
 ; If we return here, program has ended
-; Loop forever
--
-    bra -
+bra *
 
 ; =============================================================================
 ; applesoft_init: Initialize interpreter state
 ; =============================================================================
 applesoft_init:
-    ; Zero-initialize interpreter variables
+    php
+    pha
+    
     lda #0
-    sta $20        ; tokenizer_ptr
+    sta $20
     sta $21
-    sta $28        ; interp_pc
+    sta $28
     sta $29
-    sta $2E        ; var_count
-    sta $2F        ; gosub_depth
-    sta $30        ; for_depth
+    sta $2B
+    sta $2C
+    
+    pla
+    plp
     rts
 
 ; Interrupt vectors
 *=$FFFA
-!word $8000        ; NMI vector
-!word $8000        ; RESET vector
-!word $8000        ; IRQ vector
+!word $8000
+!word $8000
+!word $8000

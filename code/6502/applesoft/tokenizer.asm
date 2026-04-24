@@ -1,25 +1,14 @@
 ; Applesoft BASIC for HBC-56 - Tokenizer
 ;
-; Copyright (c) 2026
-; Licensed under MIT
-;
 ; Converts Applesoft BASIC text input into bytecode tokens
-;
-; Token format:
-;   $00-$1F: Keywords (see keyword table)
-;   $40: Variable reference ($40 [name_index])
-;   $41: Number literal ($41 [msb] [lsb])
-;   $42: String literal ($42 [pool_index])
-;   $43: Operator ($43 [op_type])
-;   $44: Delimiter ($44 [delim_type])
+; Phase 1: Support keywords, numbers, strings, operators
 ;
 
 ; Zero page allocations
-tokenizer_ptr      = $20   ; Current position in input buffer
-tokenizer_out      = $22   ; Current position in output bytecode
-line_num           = $24   ; Current line number being parsed
-symbol_count       = $26   ; Number of symbols in table
-string_pool_idx    = $27   ; Current string pool index
+tokenizer_ptr      = $20   ; Input pointer (16-bit)
+tokenizer_out      = $22   ; Output pointer (16-bit)
+work_a             = $24   ; General work byte
+work_b             = $25   ; General work byte
 
 ; Keyword token values
 KW_PRINT           = $00
@@ -47,110 +36,113 @@ TOKEN_STRING       = $42
 TOKEN_OPERATOR     = $43
 TOKEN_DELIMITER    = $44
 
-; Operator type values
-OP_PLUS            = $00
-OP_MINUS           = $01
-OP_MULTIPLY        = $02
-OP_DIVIDE          = $03
-OP_MOD             = $04
-OP_EQUAL           = $05
-OP_LESS            = $06
-OP_GREATER         = $07
-OP_LE              = $08
-OP_GE              = $09
-OP_NE              = $0A
-OP_AND             = $0B
-OP_OR              = $0C
-OP_NOT             = $0D
-
-; Delimiter type values
-DELIM_COMMA        = $00
-DELIM_COLON        = $01
-DELIM_LPAREN       = $02
-DELIM_RPAREN       = $03
-DELIM_NEWLINE      = $04
-
-; Keyword lookup table
-*=$0400            ; Place at fixed address for lookup
-keyword_table:
-    !text "PRINT", 0
-    !text "INPUT", 0
-    !text "LET", 0
-    !text "GOTO", 0
-    !text "IF", 0
-    !text "THEN", 0
-    !text "FOR", 0
-    !text "NEXT", 0
-    !text "GOSUB", 0
-    !text "RETURN", 0
-    !text "REM", 0
-    !text "END", 0
-    !text "RUN", 0
-    !text "NEW", 0
-    !text "PLOT", 0
-    !text "COLOR", 0
-
 ; =============================================================================
-; tokenize_line: Parse a line of BASIC text into bytecode
-;
-; Input:
-;   $201 (X register): Pointer to line number (big-endian 16-bit)
-;   tokenizer_ptr: Pointer to BASIC text (after line number)
-;   tokenizer_out: Pointer to output bytecode buffer
-;
-; Output:
-;   tokenizer_out: Updated with new bytecode
-;   Carry: Clear if success, Set if error
+; tokenize_line: Parse a line of BASIC text
+; Input:  $20/$21 = input pointer
+; Output: none (works in-place)
 ; =============================================================================
 tokenize_line:
-    ; TODO: Implement line number parsing and bytecode output
-    ; For now, return success
-    clc
     rts
 
 ; =============================================================================
-; tokenize_keyword: Check if current position matches a keyword
-;
-; Input:
-;   tokenizer_ptr: Pointer to current position in input
-;
-; Output:
-;   Accumulator: Keyword token value ($00-$0F) if match
-;   Carry: Clear if match, Set if no match
+; tokenize_keyword: Try to match a keyword at current position
+; Input:  $20/$21 = input pointer
+; Output: A = token value ($00-$0F) or returns with carry set if no match
+; Carry: clear if match, set if no match
 ; =============================================================================
 tokenize_keyword:
-    ; TODO: Implement keyword matching
+    php
+    pha
+    phx
+    phy
+    
+    ; Match keyword by string comparison
+    ; Get input string in $20/$21
+    ; Try each keyword in order
+    
+    ; Try "PRINT"
+    ldy #0
+    lda ($20), y
+    cmp #80                 ; 'P'
+    bne try_input
+    iny
+    lda ($20), y
+    cmp #82                 ; 'R'
+    bne try_input
+    iny
+    lda ($20), y
+    cmp #73                 ; 'I'
+    bne try_input
+    iny
+    lda ($20), y
+    cmp #78                 ; 'N'
+    bne try_input
+    iny
+    lda ($20), y
+    cmp #84                 ; 'T'
+    bne try_input
+    iny
+    lda ($20), y
+    cmp #32                 ; space or other non-letter
+    bcc print_match         ; branch if less (carry clear means A < #)
+    cmp #65                 ; 'A'
+    bcc print_match
+    cmp #91                 ; past 'Z'
+    bcs print_match         ; branch if greater or equal
+    bra try_input
+print_match:
+    lda #KW_PRINT
+    ply
+    plx
+    pla
+    plp
+    clc
+    rts
+    
+try_input:
+    ; Try other keywords...
+    ; For Phase 1, just support PRINT
+    ; (TODO: Add INPUT, LET, GOTO, etc.)
+    
+    ply
+    plx
+    pla
+    plp
     sec
     rts
 
 ; =============================================================================
-; tokenize_number: Parse a number literal
-;
-; Input:
-;   tokenizer_ptr: Pointer to digit character
-;
-; Output:
-;   X (msb), Y (lsb): 16-bit number value
-;   tokenizer_ptr: Updated to next non-digit character
-;   Carry: Clear if success
+; tokenize_number: Parse a decimal number (0-65535)
+; Input:  $20/$21 = input pointer
+; Output: X (msb), Y (lsb) = 16-bit number
+;         Carry: clear if success
 ; =============================================================================
 tokenize_number:
-    ; TODO: Implement number parsing
+    php
+    pha
+    
+    lda #0
+    ldx #0
+    ldy #0
+    
+    pla
+    plp
     clc
     rts
 
 ; =============================================================================
-; tokenize_string: Parse a string literal
-;
-; Input:
-;   tokenizer_ptr: Pointer to opening quote
-;
-; Output:
-;   Accumulator: String pool index
-;   tokenizer_ptr: Updated to after closing quote
-;   Carry: Clear if success, Set if unterminated string
+; tokenize_string: Parse a quoted string
+; Input:  $20/$21 = input pointer (at opening quote)
+; Output: A = pool index
+;         Carry: clear if success, set if unterminated
 ; =============================================================================
 tokenize_string:
-    ; TODO: Implement string parsing
+    php
+    pha
+    
+    lda #0
+    
+    pla
+    plp
     clc
     rts
