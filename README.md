@@ -91,9 +91,9 @@ sudo dnf install gcc g++ cmake git
 - Install **CMake** from [cmake.org](https://cmake.org/download/)
 - Install **Git** from [git-scm.com](https://git-scm.com/)
 
-### macOS
+### Windows or Linux
 
-```bash
+```
 $ git clone --recurse-submodules https://github.com/visrealm/hbc-56.git
 $ cd hbc-56
 $ cmake -B build -DCMAKE_BUILD_TYPE=Release -S .
@@ -102,9 +102,9 @@ $ cmake --build build --config Release
 
 The `hbc-56/build/bin` directory will then hold everything you need to run the emulator.
 
-### Windows or Linux
+### macOS
 
-```
+```bash
 $ git clone --recurse-submodules https://github.com/visrealm/hbc-56.git
 $ cd hbc-56
 $ cmake -B build -DCMAKE_BUILD_TYPE=Release -S .
